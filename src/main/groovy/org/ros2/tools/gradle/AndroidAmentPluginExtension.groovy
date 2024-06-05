@@ -20,6 +20,8 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.DependencyResolutionListener
 import org.gradle.api.artifacts.ResolvableDependencies
 import org.gradle.api.tasks.compile.AbstractCompile
+import com.android.build.gradle.AppPlugin
+import com.android.build.gradle.LibraryPlugin
 
 class AndroidAmentPluginExtension extends BaseAmentPluginExtension {
   def androidSTL
@@ -73,19 +75,28 @@ class AndroidAmentPluginExtension extends BaseAmentPluginExtension {
 
     def excludeJars = null
     def packageDependencies = null
-    if (this.gradleRecursiveDependencies) {
-      excludeJars = []
-      packageDependencies = this.dependencies.split(':') as Set
-    } else {
-      // NOTE(esteve): this is a hack so that there are no multiDex duplicate errors
-      // when building Android projects that use AAR
-      excludeJars = ['builtin_interfaces_messages.jar', 'rcl_interfaces_messages.jar', 'rcljava.jar']
-      packageDependencies = this.execDependencyPathsInWorkspace.split(':') as Set
-    }
 
-    def compileDeps = project.getConfigurations().getByName("compile").getDependencies()
+    // gradleRecursiveDependencies is hardcoded to false in the colcon-gradle-plugin:
+    // https://github.com/colcon/colcon-ros-gradle/blob/main/colcon_ros_gradle/task/ament_gradle/build.py#L67-L70
+    // 
+    // This logic is junk and prevents ament dependencies from being properly resolved. Remove this nonsense
+    // and package all dependent JAR files into the AAR
+    //
+    // if (this.gradleRecursiveDependencies) {
+    //   excludeJars = []
+    //   packageDependencies = this.dependencies.split(':') as Set
+    // } else {
+    //   // NOTE(esteve): this is a hack so that there are no multiDex duplicate errors
+    //   // when building Android projects that use AAR
+    //   excludeJars = ['builtin_interfaces_messages.jar', 'rcl_interfaces_messages.jar', /*'rcljava.jar'*/]
+    //   packageDependencies = this.execDependencyPathsInWorkspace.split(':') as Set
+    // }
+    excludeJars = ['slf4j-api-1.7.21.jar']
+    packageDependencies = this.dependencies.split(':') as Set
+
+    def compileDeps = project.getConfigurations().getByName("implementation").getDependencies()
     def fileDeps = project.files(packageDependencies.collect {
-      project.fileTree(dir: [it, 'java'].join(File.separator),
+      project.fileTree(dir: [it, 'java'].join(File.separator), 
           include: '*.jar',
           exclude: excludeJars)
     })
@@ -184,13 +195,29 @@ class AndroidAmentPluginExtension extends BaseAmentPluginExtension {
               ].join(File.separator)
             break
           case 'c++_shared':
+            // Old NDK location pre NDK25
+            // stlLibraryPath = [
+            //   project.ament.androidNDK, 'sources', 'cxx-stl', 'llvm-libc++',
+            //   'libs', project.ament.androidABI, 'lib' + project.ament.androidSTL + '.so'
+            //   ].join(File.separator)
+
+            // Post NDK25 location
+            // NOTE: this won't work for ARM systems, since that folder is 
+            //
+            // arm-linux-androideabi/libc++_shared.so
+            // vs 
+            // x86_64-linux-android/libc++_shared.so
+            //
+            // for all other platforms
             stlLibraryPath = [
-              project.ament.androidNDK, 'sources', 'cxx-stl', 'llvm-libc++',
-              'libs', project.ament.androidABI, 'lib' + project.ament.androidSTL + '.so'
+              project.ament.androidNDK, 'toolchains', 'llvm', 'prebuilt', 'linux-x86_64', 'sysroot',
+              'usr', 'lib', project.ament.androidABI + '-linux-android', 'libc++_shared.so'
               ].join(File.separator)
             break
         }
         from stlLibraryPath
+
+        duplicatesStrategy 'WARN'
        }
      }
    }
