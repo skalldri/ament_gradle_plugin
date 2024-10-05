@@ -173,13 +173,23 @@ class AndroidAmentPluginExtension extends BaseAmentPluginExtension {
 
       project.copy {
         project.ament.dependencies.split(':').each {
-          def fp = [project.file(it).parentFile.parentFile, 'lib'
-              ].join(File.separator)
+          // The input path we get passed is to /install/<pkg_name>/share/<pkg_name>
+          // Resolve the package root path at /install/<pkg_name>
+          def fp = [project.file(it).parentFile.parentFile].join(File.separator)
+          def pkg = project.file(it).parentFile.parentFile.name
+
+          // Add any libraries found under /install/<pkg_name>/lib
           def ft = project.fileTree(
-            dir: fp,
+            dir: [fp, 'lib'].join(File.separator),
             include: ['*.so'])
+          // Add any libraries found under /install/<pkg_name>/lib/jni
           ft += project.fileTree(
-            dir: [fp, 'jni'].join(File.separator),
+            dir: [fp, 'lib', 'jni'].join(File.separator),
+            include: ['*.so'])
+          // Special case for vendor libs:
+          // add any libraries found under /install/<pkg_name>/opt/<pkg_name>/lib
+          ft += project.fileTree(
+            dir: [fp, 'opt', pkg, 'lib'].join(File.separator),
             include: ['*.so'])
           from ft
           into this.stlDestination
