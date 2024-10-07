@@ -19,7 +19,7 @@ repositories {
 }
 
 group = 'org.ros2.tools.gradle'
-version = '0.7.1'
+version = '0.7.2'
 
 dependencies {
   implementation gradleApi()
@@ -32,7 +32,7 @@ gradlePlugin {
         simplePlugin {
             id = 'org.ros2.tools.gradle'
             implementationClass = 'org.ros2.tools.gradle.AmentPlugin'
-            version = '0.7.1'
+            version = '0.7.2'
         }
     }
 }
